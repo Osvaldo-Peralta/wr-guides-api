@@ -35,16 +35,30 @@ el UNIQUE de BD cubren el abuso casual.
 1. **Supabase (Fase 4):** Dashboard → SQL Editor → pegar y correr
    `supabase/schema.sql` (3 tablas + RLS sin políticas anon + índices +
    función `guide_stats()` para el dashboard).
-2. **Env vars** (Supabase → Project Settings → API):
-   `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` — **la service_role es secreta:
-   solo en Vercel (Settings → Environment Variables), nunca en el repo**.
-   Opcional: `ADMIN_TOKEN` (string larga al azar) para el endpoint de upsert.
-3. **Sembrar guías:**
+2. **Env vars en Vercel** (Settings → Environment Variables del proyecto API):
+   - `SUPABASE_URL` = `https://<ref>.supabase.co` (Supabase → Connect → Server APIs,
+     o Project Settings → API → Project URL).
+   - `SUPABASE_SERVICE_ROLE_KEY` = la **SECRET key** (`sb_secret_…`): Project
+     Settings → API Keys → **Secret keys** → Generate. ⚠️ La *Publishable key*
+     (`sb_publishable_…`) NO sirve: es pública y RLS la bloquea — `GET /api/health`
+     la detecta y responde 503 con la explicación. Nunca pegar la secret en el
+     repo ni en chats.
+   - `ADMIN_TOKEN` = frase larga al azar (p. ej. `openssl rand -hex 24`): protege
+     `POST /api/guides` (siembra/sync del catálogo).
+   - `ALLOWED_ORIGINS` (opcional): default `https://wr-guides-web.vercel.app,http://localhost:3000`.
+3. **Sembrar guías** (los 3 repos son independientes — no requiere rutas hermanas):
    ```bash
    WR_API=https://TU-api.vercel.app ADMIN_TOKEN=… node scripts/seed-guides.mjs
    ```
-   (lee `../wr-guides-web/content/guias_index.json`; re-sembrar tras cada sync
-   de contenido — el upsert por slug es idempotente).
+   El script descarga el índice del **sitio desplegado**
+   (`https://wr-guides-web.vercel.app/guias_index.json`, publicado por el
+   gen-index v2 del frontend). Alternativas: `WR_INDEX_URL=<otra url>` o
+   `--index /ruta/absoluta/guias_index.json`. Re-sembrar tras cada sync de
+   contenido — el upsert por slug es idempotente.
+
+4. **Verificar:** `GET https://TU-api.vercel.app/api/health` →
+   `{"ok":true,"db":"supabase"}`. Si `ok:false`, el campo `advertencia` explica
+   el problema (p. ej. publishable key en vez de secret).
 
 ## Desarrollo local (sin Supabase)
 
