@@ -1,13 +1,14 @@
 {
   "name": "wr-guides-api",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "API de comunidad del ecosistema WR-LAB (vistas + likes por guía) — Fase 3-4 del plan de migración",
   "scripts": {
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start -p 3002",
-    "seed": "node scripts/seed-guides.mjs"
+    "seed": "node scripts/seed-guides.mjs",
+    "test": "node scripts/test-like-minimal.mjs"
   },
   "dependencies": {
     "next": "^14.2.5",

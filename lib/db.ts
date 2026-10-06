@@ -43,7 +43,14 @@ function supabaseDb(url: string, key: string): Db {
       cache: "no-store",
     });
     if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
-    return r.json();
+    // v0.3.2: con Prefer return=minimal PostgREST responde 201/204 SIN cuerpo.
+    // r.json() incondicional lanzaba "Unexpected end of JSON input" DESPUÉS de
+    // que la escritura ya había impactado en la BD → like/unlike devolvían 502
+    // aunque el cambio persistía (bug real de producción, 2026-10-06, detectado
+    // por el contract test de la Fase 5). Con return=representation el cuerpo
+    // nunca es vacío; el ?? [] cubre ambos casos.
+    const text = await r.text();
+    return text ? JSON.parse(text) : [];
   }
   return {
     kind: "supabase",

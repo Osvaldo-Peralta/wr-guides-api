@@ -1,0 +1,28 @@
+API v0.3.2 — fix del like 502 (2026-10-06)
+════════════════════════════════════════════
+
+QUÉ ARREGLA
+  POST /api/guides/[slug]/like devolvía 502 "Unexpected end of JSON input"
+  en producción (v0.3.1), aunque el like/unlike SÍ se guardaba en Supabase.
+  Causa: Prefer: return=minimal → PostgREST responde sin cuerpo; lib/db.ts
+  llamaba r.json() a ciegas. Fix: tolerar cuerpo vacío.
+  Nuevo: npm test → 9/9 con un mock de PostgREST (reproduce el bug real).
+
+PASOS (en tu máquina)
+  1. Descomprimí este zip DENTRO de tu clon local, sobreescribiendo:
+       cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api"
+       unzip -o ruta/al/wr-guides-api-v0.3.2.zip
+  2. Verificá el fix localmente (opcional pero recomendado):
+       npm install
+       npm test          # → 9/9 verdes
+  3. Commit + push (Vercel redeploya solo):
+       git add lib/db.ts package.json scripts/test-like-minimal.mjs OPERACIONES.md docs/PRIMER-DESPLEGUE.md
+       git commit -m "v0.3.2: fix like 502 (PostgREST return=minimal, cuerpo vacío) + test de regresión"
+       git push
+  4. Cuando el deploy termine (~1-2 min), verificá producción:
+       curl -s -X POST https://wr-guides-api.vercel.app/api/guides/jinx/like          -H "Content-Type: application/json" -H "x-visitor-id: $(uuidgen)"          -d '{"action":"like"}'
+       # esperado: {"liked":true,"likes":N}   (con v0.3.1 salía 502)
+       # si el deploy NO trae el fix, el health sigue en 200 pero el like da 502.
+
+IMPORTANTE: desplegar esto ANTES que el widget de la web (Fase 5),
+si no el botón "Me gusta" recibiría 502 (aunque se guardaría igual).

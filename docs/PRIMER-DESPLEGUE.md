@@ -46,7 +46,7 @@ En local es idéntico: web en `localhost:3000/3001`, API en `localhost:3002`.
 | Pieza | URL | Qué devuelve |
 |---|---|---|
 | Web (producción) | `https://wr-guides-web.vercel.app` | Páginas HTML |
-| **API (producción)** | `https://__________________` ← **completar en §3.4** | JSON |
+| **API (producción)** | `https://wr-guides-api.vercel.app` ✅ desplegada 2026-10-06 | JSON |
 | API (local) | `http://localhost:3002` | JSON |
 | Supabase (dashboard) | `https://supabase.com/dashboard` → tu proyecto | Panel de administración |
 | Índice de guías | `https://wr-guides-web.vercel.app/guias_index.json` | JSON (lo lee el seed) |
@@ -60,17 +60,21 @@ Los `<placeholder>` como `TU-api.vercel.app` o `<tu-proyecto-api>` en la docs
 
 ## 2. Snapshot de hoy (2026-10-06): dónde estás parado
 
-Diagnóstico verificado de tu sistema ahora mismo:
+**Actualización nocturna: la recuperación §3 se completó.** Estado verificado:
 
 - ✅ **Web desplegada y actualizada** (variante legal de Jinx y callouts renderizan en producción).
-- ✅ **API local funcionando** y conectada a Supabase (`health → db:"supabase"`).
-- ✅ **17 guías en la BD** (sembradas con la API v0.1, antes de actualizar).
-- ⚠️ **La tabla `guides` tiene schema viejo**: le faltan las columnas `title`,
-  `version`, `bundle` (se agregó en v0.2). Por eso la re-siembra dio `PGRST204`.
-  → Se arregla con la **migración 001** (§3.2).
-- ❌ **La API todavía NO está desplegada en Vercel**
-  (`wr-guides-api.vercel.app` no existe; hay que crear el proyecto — §3.4).
-- 🔴 **Tu ADMIN_TOKEN se pegó en el chat** → está comprometido. Rotarlo YA (§3.1).
+- ✅ **API desplegada en Vercel**: `https://wr-guides-api.vercel.app` →
+  `health → {ok:true, db:"supabase"}` (verificado desde fuera).
+- ✅ **Migración 001 aplicada** + **17 guías sembradas** (el seed no dio errores
+  ni en local ni contra producción — confirmado por Morningstar).
+- ✅ **CORS de producción correcto**: `Access-Control-Allow-Origin:
+  https://wr-guides-web.vercel.app` + credenciales + `x-visitor-id` (preflight 204).
+- ✅ **ADMIN_TOKEN rotado** (el viejo `Liz_Yuumi` está muerto y enterrado).
+- ⚠️ **Pendiente: redeployar la API v0.3.2** — el contract test de la Fase 5
+  encontró el error #5 (§4): `POST like` → 502 aunque el like persistía.
+  Ya está corregido y probado (9/9 con mock de PostgREST); falta el push + redeploy.
+- 🚧 **Fase 5 construida**: widget 👁/❤ listo en `wr-guides-web`
+  (`lib/api.ts` + `components/GuideStats.tsx`), a la espera de su despliegue.
 
 ---
 
@@ -128,7 +132,7 @@ el `.env.local` (o `.env`) con `ADMIN_TOKEN` nuevo + `WR_API=http://localhost:30
 
 ```bash
 cd ~/Proyectos/Sitio\ Web/wr-guides-api
-git pull          # trae v0.3.1 (seed con preflight + .env automático)
+git pull          # trae v0.3.2 (fix del like 502 + test de regresión `npm test`)
 npm run seed
 ```
 
@@ -231,6 +235,8 @@ curl -s -i -X OPTIONS https://PEGA-AQUI-TU-URL-REAL.vercel.app/api/guides/jinx/s
 ```
 
 Con §3.1→§3.7 en verde, la Fase 5 (widget 👁/❤ en la web) queda desbloqueada.
+✅ **Hecho el 2026-10-06:** §3 completo (deploy + seed + token rotado verificados
+desde fuera) y widget de la Fase 5 construido en `wr-guides-web`.
 
 ---
 
@@ -242,10 +248,12 @@ Con §3.1→§3.7 en verde, la Fase 5 (widget 👁/❤ en la web) queda desbloqu
 | 2 | Comando con el placeholder literal `TU-api.vercel.app` | Salió un JSON que parecía válido | Ese JSON en realidad salió de tu **localhost** (verificado: `tu-api.vercel.app` es un dominio ajeno que responde 404 — tu API no está ahí ni en ningún Vercel todavía). Los placeholders se reemplazan; si la salida "no pega" con la URL, desconfiar de la salida. |
 | 3 | BD con schema v0.1 + API v0.3 | `502 PGRST204 'bundle'` | Al actualizar la API, revisar `supabase/migrations/`. `PGRST204` = "no existe esa columna/tabla" = schema desactualizado. |
 | 4 | `ADMIN_TOKEN=Liz_Yuumi` pegado en el chat | — | Todo secreto que sale de tu máquina se rota. Generar → .env/Vercel → jamás al chat. |
+| 5 | `POST /api/guides/[slug]/like` → `502 "Unexpected end of JSON input"`... ¡pero el like SÍ se guardaba! (encontrado el 2026-10-06 por el contract test de la Fase 5, en producción v0.3.1) | El botón de like recibía 502; al recargar, el like aparecía registrado igual | `setLike()` usa `Prefer: return=minimal` → PostgREST responde 201/204 **sin cuerpo**, y `req()` llamaba `r.json()` a ciegas: el throw ocurría DESPUÉS de la escritura exitosa. Cura en **v0.3.2**: tolerar cuerpo vacío (`lib/db.ts`). Lección: un 502 no siempre significa "no se hizo" — verificar el estado real antes de reintentar (el widget de la Fase 5 hace exactamente eso: si el voto falla, re-sincroniza con `GET /like` en vez de asumir). Regresión blindada: `npm test` (mock de PostgREST que reproduce el cuerpo vacío). |
 
 Ninguno fue grave (por eso el sistema tiene preflight, health checks y
-migraciones) — pero los cuatro son exactamente los tropiezos clásicos del
-primer despliegue. Ya están documentados y/o blindados.
+migraciones) — pero los cinco son exactamente los tropiezos clásicos del
+primer despliegue. Ya están documentados y/o blindados. El #5 es especial:
+lo encontró una prueba automática ANTES de que lo encontrara un lector.
 
 ---
 
@@ -282,4 +290,6 @@ primer despliegue. Ya están documentados y/o blindados.
 
 ---
 
-*Última actualización: 2026-10-06 (v0.3.1) — tras el incidente PGRST204/URLs.*
+*Última actualización: 2026-10-06 noche (v0.3.2) — despliegue completado y
+verificado; error #5 (like 502) encontrado por el contract test de la Fase 5,
+corregido y con test de regresión (`npm test`).*

@@ -233,18 +233,25 @@ git add -A && git commit -m "datos: win rates patch X.Y" && git push
 ## 6. Comprobaciones de salud (periódicas / antes de cada fase)
 
 ```bash
+# URLs reales del sistema (verificadas 2026-10-06):
+#   API: https://wr-guides-api.vercel.app   ·   Web: https://wr-guides-web.vercel.app
+
 # 1. API viva y conectada:
-curl https://TU-api.vercel.app/api/health          # → ok:true, db:"supabase"
+curl https://wr-guides-api.vercel.app/api/health          # → ok:true, db:"supabase"
 # 2. Catálogo completo:
-curl -s https://TU-api.vercel.app/api/guides | grep -o '"slug"' | wc -l   # → 17 (o las que haya)
+curl -s https://wr-guides-api.vercel.app/api/guides | grep -o '"slug"' | wc -l   # → 17 (o las que haya)
 # 3. Web sirve el índice:
-curl -s -o /dev/null -w "%{http_code}\n" https://TU-web.vercel.app/guias_index.json  # → 200
+curl -s -o /dev/null -w "%{http_code}\n" https://wr-guides-web.vercel.app/guias_index.json  # → 200
 # 4. Punta a punta (vista + like de prueba contra prod):
-curl -s -X POST https://TU-api.vercel.app/api/guides/jinx/view -H "x-visitor-id: smoke-test-1"
-curl -s -X POST https://TU-api.vercel.app/api/guides/jinx/like -H "Content-Type: application/json" -H "x-visitor-id: smoke-test-1" -d '{"action":"like"}'
-curl -s https://TU-api.vercel.app/api/guides/jinx/stats    # → views:1, likes:1
-# (limpiar luego desde Supabase → Table Editor → views/likes → borrar filas de "smoke-test-1")
-# 5. Secretos fuera de git:
+curl -s -X POST https://wr-guides-api.vercel.app/api/guides/jinx/view -H "x-visitor-id: $(uuidgen)"
+#    ↑ con v0.3.1 este POST like devolvía 502 "Unexpected end of JSON input" (§7, última fila):
+curl -s -X POST https://wr-guides-api.vercel.app/api/guides/jinx/like -H "Content-Type: application/json" -H "x-visitor-id: $(uuidgen)" -d '{"action":"like"}'
+#    ↑ esperado desde v0.3.2: {"liked":true,"likes":N} — si ves 502, el deploy es viejo
+curl -s https://wr-guides-api.vercel.app/api/guides/jinx/stats
+# (limpiar luego desde Supabase → Table Editor → views/likes → borrar las filas de prueba)
+# 5. Test de regresión local del ciclo view/like (mock de PostgREST, sin tocar prod):
+npm test                                                   # → 9/9 verdes
+# 6. Secretos fuera de git:
 cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api" && git status --short   # .env.local NO debe aparecer
 git log --all --oneline -- .env.local                                            # sin resultados = jamás commiteado
 ```
@@ -267,6 +274,7 @@ git log --all --oneline -- .env.local                                           
 | `npm run dev` dice puerto ocupado / cambios que no aparecen | Server **zombi** de una sesión anterior | `pkill -f "next-server"`; si persiste: `ss -tlnp \| grep 3002` → `kill -9 <PID>` |
 | Vercel build del web falla en `gen-index` | Faltan guías/bundles en `content/` | Verificar que la copia desde el lab incluyó `.md` + `.html` + `winrates.csv` |
 | La API prod responde 503 `db_unavailable` | Env vars no cargadas en Vercel (o cargadas DESPUÉS del deploy) | Settings → Environment Variables → verificar las 3 → **Redeploy** |
+| `POST .../like` → `502 {"error":"fallo de BD","detalle":"Unexpected end of JSON input"}` **pero el like/unlike sí se guardaba** (visto en prod v0.3.1, 2026-10-06) | `setLike()` usa `Prefer: return=minimal` → PostgREST responde 201/204 con **cuerpo vacío**; `req()` llamaba `r.json()` incondicional y el throw ocurría DESPUÉS de la escritura exitosa | Actualizar a **v0.3.2** (`lib/db.ts` tolera cuerpo vacío) + redeploy. Regresión blindada: `npm test` (mock de PostgREST, 9/9). Cliente robusto: el widget de la web re-sincroniza con `GET /like` si el POST falla, nunca asume |
 
 **Regla de oro del debugging:** leer SIEMPRE el cuerpo JSON de la respuesta
 (`curl -i ...`), no solo el código HTTP — desde v0.3 los errores traen `detalle`
@@ -287,6 +295,7 @@ con el mensaje real de la BD.
 
 ---
 
-*v1.0 — 2026-10-05 · Cubre: montaje desde cero, flujo diario de guías, health
-checks, troubleshooting de errores reales, seguridad. Actualizar este archivo
-cuando cambie el flujo (es parte del repo: vive junto a la API).*
+*v1.1 — 2026-10-06 · Cubre: montaje desde cero, flujo diario de guías, health
+checks (con URLs reales + `npm test`), troubleshooting de errores reales (incl.
+el like 502 de v0.3.1), seguridad. Actualizar este archivo cuando cambie el
+flujo (es parte del repo: vive junto a la API).*
