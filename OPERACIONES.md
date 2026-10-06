@@ -7,6 +7,11 @@
 >
 > Convención: `TU-*` = valor tuyo que no vive en el repo. Los comandos asumen
 > las rutas de tu máquina; si cambian, ajusta una vez y olvida.
+>
+> 🐣 **¿Primera vez desplegando en Vercel + Supabase?** Empezá por
+> [`docs/PRIMER-DESPLEGUE.md`](docs/PRIMER-DESPLEGUE.md) — guía personal paso
+> a paso escrita tras el incidente del 2026-10-06 (modelo mental de las 3
+> piezas, migraciones, rotación de secretos, despliegue click a click).
 
 ---
 
@@ -126,9 +131,12 @@ curl http://localhost:3002/api/health
 **Modo producción (recomendado — 1 sola terminal, nada que arrancar):**
 ```bash
 cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api"
-WR_API=https://TU-api.vercel.app ADMIN_TOKEN=TU-ADMIN_TOKEN node scripts/seed-guides.mjs
+WR_API=https://TU-api.vercel.app/ npm run seed
+# v0.3.1+: el ADMIN_TOKEN se lee SOLO del .env.local/.env (no lo pegues en el
+# comando — queda en el historial y en los chats). Preflight verifica que la
+# URL sea realmente la API antes de escribir nada.
 # el índice se descarga solo de https://TU-web.vercel.app/guias_index.json
-# esperado: "sembrando 17 guías..." → "OK: 17 guías sembradas/actualizadas"
+# esperado: "✓ API confirmada..." → "✔ OK: 17 guías sembradas/actualizadas"
 ```
 **Modo local (2 terminales — solo si la API prod no existe aún):**
 ```bash
@@ -136,7 +144,7 @@ WR_API=https://TU-api.vercel.app ADMIN_TOKEN=TU-ADMIN_TOKEN node scripts/seed-gu
 cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api" && npm run dev
 # Terminal 2 (MISMO directorio wr-guides-api, NO wr-guides-web):
 cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api"
-WR_API=http://localhost:3002 ADMIN_TOKEN=EL-MISMO-DEL-.env.local node scripts/seed-guides.mjs
+WR_API=http://localhost:3002/ npm run seed
 ```
 ✅ **Check:**
 ```bash
@@ -253,6 +261,8 @@ git log --all --oneline -- .env.local                                           
 | `/api/health` → `db:"memory"` en local | Faltan `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` en `.env.local`, o el server arrancó antes de crearlo | Completar el `.env.local` y **reiniciar** `npm run dev` (las vars se leen al arrancar) |
 | Seed → `HTTP 500` al **repetirlo** (la 1ª vez funcionó) | Bug ya corregido (v0.3): upsert sin `on_conflict` explícito; la tabla tiene 2 únicas (id+slug) | Actualizar la API (`git pull` + redeploy). Re-sembrar es seguro desde v0.3 |
 | Seed → 401 | `ADMIN_TOKEN` del comando ≠ el del `.env.local`/Vercel | Usar exactamente el mismo string en ambos lados |
+| Seed → `502` con `PGRST204: Could not find the 'X' column` (2026-10-06: `'bundle'`) | La BD tiene **schema viejo**: se creó con una versión anterior de `schema.sql` y la API nueva envía columnas que no existen | Correr en SQL Editor la migración `supabase/migrations/001_add_title_version_bundle.sql` (idempotente, no borra datos) y re-sembrar. Costumbre: tras `git pull` de la API, revisar si hay migraciones nuevas |
+| Seed → `✗ <url> devolvió HTML: eso NO es la API` (o `✗ 404 {}` en versiones viejas) | `WR_API` apunta a la **web** o a un dominio ajeno (p. ej. placeholder literal `TU-api.vercel.app`) | `WR_API` = URL del proyecto **wr-guides-api** (local: `http://localhost:3002/`). Desde v0.3.1 el seed hace preflight y lo detecta antes de escribir nada |
 | Seed → "0 guías sembradas" | El `guias_index.json` descargado es viejo (deploy de Vercel sin terminar) o el índice local no existe | Esperar el deploy; o pasar `--index /ruta/absoluta/wr-guides-web/content/guias_index.json` |
 | `npm run dev` dice puerto ocupado / cambios que no aparecen | Server **zombi** de una sesión anterior | `pkill -f "next-server"`; si persiste: `ss -tlnp \| grep 3002` → `kill -9 <PID>` |
 | Vercel build del web falla en `gen-index` | Faltan guías/bundles en `content/` | Verificar que la copia desde el lab incluyó `.md` + `.html` + `winrates.csv` |

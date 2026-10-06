@@ -14,6 +14,11 @@ Backend separado del frontend (principio 7 del plan): gestiona **vistas** y
 - **Capa hexagonal `lib/db.ts`:** Supabase en producción; memoria en dev local
   (sin credenciales). En producción sin env vars → 503 explícito, nunca memoria.
 
+📖 **Docs:** [`OPERACIONES.md`](OPERACIONES.md) (runbook del ecosistema) ·
+[`docs/PRIMER-DESPLEGUE.md`](docs/PRIMER-DESPLEGUE.md) (guía personal paso a
+paso para el primer despliegue Vercel + Supabase — escrita tras el incidente
+PGRST204 del 2026-10-06).
+
 ## Endpoints
 
 | Método | Ruta | Descripción |
@@ -35,6 +40,10 @@ el UNIQUE de BD cubren el abuso casual.
 1. **Supabase (Fase 4):** Dashboard → SQL Editor → pegar y correr
    `supabase/schema.sql` (3 tablas + RLS sin políticas anon + índices +
    función `guide_stats()` para el dashboard).
+   ⚠️ ¿La base **ya existía** de una versión anterior? `CREATE TABLE IF NOT
+   EXISTS` no agrega columnas nuevas: corré también los archivos de
+   `supabase/migrations/` en orden (p. ej. `001` agrega `title/version/bundle`,
+   cura del error `PGRST204` al re-sembrar).
 2. **Env vars en Vercel** (Settings → Environment Variables del proyecto API):
    - `SUPABASE_URL` = `https://<ref>.supabase.co` (Supabase → Connect → Server APIs,
      o Project Settings → API → Project URL).
@@ -48,8 +57,13 @@ el UNIQUE de BD cubren el abuso casual.
    - `ALLOWED_ORIGINS` (opcional): default `https://wr-guides-web.vercel.app,http://localhost:3000`.
 3. **Sembrar guías** (los 3 repos son independientes — no requiere rutas hermanas):
    ```bash
-   WR_API=https://TU-api.vercel.app ADMIN_TOKEN=… node scripts/seed-guides.mjs
+   # .env.local/.env con ADMIN_TOKEN (+ WR_API si no es localhost:3002)
+   npm run seed                                          # contra la API local
+   WR_API=https://TU-api.vercel.app/ npm run seed        # contra producción
    ```
+   Desde v0.3.1 el token se lee del `.env` (no lo pegues en el comando: queda
+   en el historial/chats) y hay **preflight**: el script verifica que `WR_API`
+   sea realmente la API antes de escribir nada.
    El script descarga el índice del **sitio desplegado**
    (`https://wr-guides-web.vercel.app/guias_index.json`, publicado por el
    gen-index v2 del frontend). Alternativas: `WR_INDEX_URL=<otra url>` o

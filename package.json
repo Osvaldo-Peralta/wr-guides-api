@@ -1,8 +1,8 @@
 {
   "name": "wr-guides-api",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "private": true,
-  "description": "API de comunidad del ecosistema WR-LAB (vistas + likes por guía) — Fase 3 del plan de migración",
+  "description": "API de comunidad del ecosistema WR-LAB (vistas + likes por guía) — Fase 3-4 del plan de migración",
   "scripts": {
     "dev": "next dev -p 3002",
     "build": "next build",

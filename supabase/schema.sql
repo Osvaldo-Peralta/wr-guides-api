@@ -1,10 +1,15 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- WR-GUIDES-API · Fase 4 — esquema mínimo Supabase (plan §Fase 4)
+-- WR-GUIDES-API · Fase 4 — esquema Supabase (v0.3)
 -- Cómo aplicar: Supabase Dashboard → SQL Editor → pegar TODO → Run.
 -- Principios del plan: la BD almacena ESTADO, no contenido (los reportes
 -- siguen siendo Markdown en el repo); RLS activo en todas las tablas;
--- el backend usa service_role (nunca se expone al navegador) y por eso
+-- el backend usa la SECRET key (nunca se expone al navegador) y por eso
 -- NO hay políticas para anon: la única puerta de entrada es la API.
+--
+-- ⚠️ ¿Tu base YA existe de una versión anterior? CREATE TABLE IF NOT
+-- EXISTS no agrega columnas nuevas a tablas existentes. Revisá
+-- supabase/migrations/ y corré las que falten (p. ej. 001 agrega
+-- title/version/bundle a bases creadas con el schema v0.1).
 -- ═══════════════════════════════════════════════════════════════════════
 
 -- Tabla de guías (referencia ligera — el contenido vive en Markdown)
@@ -15,6 +20,9 @@ create table if not exists public.guides (
   role         text,
   patch        text,
   status       text,
+  title        text,
+  version      text,
+  bundle       text,
   published_at date,
   created_at   timestamptz not null default now()
 );
@@ -41,7 +49,7 @@ create table if not exists public.guide_likes (
 );
 
 -- RLS activo en las tres tablas, SIN políticas para anon/authenticated:
--- solo service_role (backend) puede leer/escribir. Defensa en profundidad.
+-- solo la secret key (backend) puede leer/escribir. Defensa en profundidad.
 alter table public.guides      enable row level security;
 alter table public.guide_views enable row level security;
 alter table public.guide_likes enable row level security;
@@ -63,8 +71,10 @@ $$;
 -- Verificación post-instalación (opcional, en SQL Editor):
 --   select table_name from information_schema.tables
 --   where table_schema='public';                        → 3 tablas
+--   select column_name from information_schema.columns
+--   where table_name='guides' order by ordinal_position; → 11 columnas
 --   select relname, relrowsecurity from pg_class
 --   where relname in ('guides','guide_views','guide_likes');  → RLS = true ×3
--- Sembrado de guías: desde wr-guides-api →  npm run seed
--- (lee guias_index.json del frontend y hace upsert por slug)
+-- Sembrado de guías: desde wr-guides-api → npm run seed
+-- (lee guias_index.json del frontend y hace upsert por slug — idempotente)
 -- ═══════════════════════════════════════════════════════════════════════
