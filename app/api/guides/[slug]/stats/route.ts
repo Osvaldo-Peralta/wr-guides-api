@@ -7,12 +7,16 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: { slug: string } }) {
   const db = getDb();
   if (!db) return dbUnavailable(req);
-  const g = await db.getGuide(params.slug);
-  if (!g) return json(req, { error: "guía no encontrada" }, 404);
-  return json(req, {
-    slug: g.slug,
-    views: await db.countViews(g.id!),
-    likes: await db.countLikes(g.id!),
-  });
+  try {
+    const g = await db.getGuide(params.slug);
+    if (!g) return json(req, { error: "guía no encontrada" }, 404);
+    return json(req, {
+      slug: g.slug,
+      views: await db.countViews(g.id!),
+      likes: await db.countLikes(g.id!),
+    });
+  } catch (e) {
+    return json(req, { error: "fallo de BD", detalle: String((e as Error)?.message || e) }, 502);
+  }
 }
 export async function OPTIONS(req: Request) { return optionsResponse(req); }

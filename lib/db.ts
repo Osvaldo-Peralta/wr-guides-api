@@ -9,6 +9,9 @@ export interface GuideRow {
   role: string | null;
   patch: string | null;
   status: string | null;
+  title?: string | null;
+  version?: string | null;
+  bundle?: string | null;
   published_at: string | null;
 }
 
@@ -52,7 +55,10 @@ function supabaseDb(url: string, key: string): Db {
       return rows[0] ?? null;
     },
     async upsertGuides(rows) {
-      const out = await req("guides", {
+      // on_conflict=slug EXPLÍCITO: la tabla tiene 2 restricciones únicas (id PK + slug);
+      // sin el target, PostgREST falla al re-sembrar ("no unique or exclusion constraint
+      // matching the ON CONFLICT specification"). Con él, la siembra es idempotente.
+      const out = await req("guides?on_conflict=slug", {
         method: "POST",
         headers: { Prefer: "return=representation,resolution=merge-duplicates" },
         body: JSON.stringify(rows),

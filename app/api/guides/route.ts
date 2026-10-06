@@ -16,15 +16,15 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const db = getDb();
   if (!db) return dbUnavailable(req);
-  if (db.kind === "supabase") {
-    const token = req.headers.get("x-admin-token") || "";
-    if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
-      return json(req, { error: "x-admin-token inválido" }, 401);
-    }
+  const token = req.headers.get("x-admin-token") || "";
+  if (process.env.ADMIN_TOKEN) {
+    if (token !== process.env.ADMIN_TOKEN) return json(req, { error: "x-admin-token inválido" }, 401);
+  } else if (db.kind === "supabase") {
+    return json(req, { error: "ADMIN_TOKEN no configurado en el servidor" }, 401);
   }
   const body = await req.json().catch(() => null);
-  const rows: GuideRow[] = Array.isArray(body?.guias) ? body.guias : null;
-  if (!rows) return json(req, { error: "body esperado: { guias: GuideRow[] }" }, 400);
+  const rows: GuideRow[] = Array.isArray(body?.guias) ? body.guias : [];
+  if (!rows.length) return json(req, { error: "body esperado: { guias: GuideRow[] } (no vacío)" }, 400);
   const limpias = rows
     .filter((r) => typeof r.slug === "string" && r.slug.length > 0 && r.slug.length < 120)
     .map((r) => ({
@@ -33,10 +33,17 @@ export async function POST(req: Request) {
       role: r.role ?? null,
       patch: r.patch ?? null,
       status: r.status ?? null,
+      title: r.title ?? null,
+      version: r.version ?? null,
+      bundle: r.bundle ?? null,
       published_at: r.published_at ?? null,
     }));
-  const n = await db.upsertGuides(limpias);
-  return json(req, { upsert: n });
+  try {
+    const n = await db.upsertGuides(limpias);
+    return json(req, { upsert: n });
+  } catch (e) {
+    return json(req, { error: "upsert falló", detalle: String((e as Error)?.message || e) }, 502);
+  }
 }
 
 export async function OPTIONS(req: Request) { return optionsResponse(req); }
