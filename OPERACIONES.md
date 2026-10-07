@@ -295,7 +295,45 @@ con el mensaje real de la BD.
 
 ---
 
-*v1.1 — 2026-10-06 · Cubre: montaje desde cero, flujo diario de guías, health
+## 9. Dashboard privado /admin (Fase 8)
+
+**URL:** `https://TU-api.vercel.app/admin` · **contraseña:** el valor de
+`ADMIN_TOKEN` (usuario: cualquiera, p. ej. `admin`). El navegador muestra el
+prompt de Basic Auth y lo recuerda por sesión; para probar de cero, ventana
+incógnito.
+
+**Qué muestra** (todo server-side, sin JS cliente):
+· KPIs: vistas totales · likes totales · visitantes únicos · guías sembradas · tasa de like (likes c/100 vistas)
+· Serie de 14 días (barras rosa=vistas, cian=likes; días sin actividad en 0)
+· Tabla por guía (con link al sitio) y por campeón
+· Actividad reciente (últimos 12 eventos view/like con tiempo relativo)
+
+**Variantes de acceso:**
+```bash
+# JSON crudo (debugging / scripting):
+curl -u admin:TU_ADMIN_TOKEN https://TU-api.vercel.app/api/admin/stats
+```
+
+**Reglas y límites conocidos:**
+1. La auth es Basic Auth simple (plan §Fase 8: "contraseña simple" como paso
+   inicial). Si el panel dejara de ser solo tuyo, subir de nivel: sesión con
+   expiración o Vercel Password Protection encima.
+2. `ADMIN_TOKEN` es la única llave: rotalo como siempre (§8) y el panel queda
+   protegido con el nuevo valor automáticamente.
+3. Lecturas paginadas de a 1000 eventos: con miles de vistas/día el panel
+   seguirá funcionando, pero si algún día pesa, mover agregación a SQL
+   (hoja de ruta V4 en docs/ROADMAP-V2-V4.md).
+4. El panel NO duplica Vercel Analytics: países/dispositivos/referentes viven
+   allá (Fase 7 del web); acá solo estado de comunidad (Supabase).
+
+**Si algo falla:**
+· 503 en /admin → falta `ADMIN_TOKEN` en el proyecto API de Vercel.
+· Panel con mensaje de error de BD → falta la función `guide_stats()` en
+   Supabase (corré `supabase/schema.sql` o revisá que la base sea la correcta).
+· Números en 0 con sitio activo → el seed no incluye guías nuevas: corrido
+   manual de `npm run seed` o el re-seed automático del sync (Fase 6 del web).
+
+*v1.2 — 2026-10-07 · Cubre: montaje desde cero, flujo diario de guías, health
 checks (con URLs reales + `npm test`), troubleshooting de errores reales (incl.
-el like 502 de v0.3.1), seguridad. Actualizar este archivo cuando cambie el
+el like 502 de v0.3.1), dashboard /admin (Fase 8), seguridad. Actualizar este archivo cuando cambie el
 flujo (es parte del repo: vive junto a la API).*

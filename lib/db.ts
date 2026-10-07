@@ -25,6 +25,18 @@ export interface Db {
   setLike(guideId: number, visitorId: string, liked: boolean): Promise<void>;
   getLike(guideId: number, visitorId: string): Promise<boolean>;
   countLikes(guideId: number): Promise<number>;
+  adminOverview(): Promise<AdminOverview>; // Fase 8: dashboard /admin
+}
+
+// ── Fase 8: forma del overview que consume /admin y /api/admin/stats ──
+export interface AdminOverview {
+  generado: string; // ISO utc
+  db: "supabase" | "memory";
+  totals: { views: number; likes: number; visitantes: number; guias: number };
+  porGuia: { slug: string; champion: string | null; role: string | null; views: number; likes: number }[];
+  porCampeon: { champion: string; views: number; likes: number; guias: number }[];
+  diario: { dia: string; views: number; likes: number }[]; // últimos 14 días UTC (incluye ceros)
+  recientes: { tipo: "view" | "like"; slug: string; at: string }[]; // últimos 12 eventos
 }
 
 const VIEW_DEDUPE_MS = 60 * 60 * 1000; // 1 h
@@ -120,14 +132,48 @@ function supabaseDb(url: string, key: string): Db {
       const range = r.headers.get("content-range") || "";
       return Number(range.split("/")[1] || 0);
     },
+    // Fase 8: overview agregado para /admin. Una sola pasada de lecturas:
+    // guías + rpc guide_stats() + eventos crudos (paginados de a 1000).
+    async adminOverview() {
+      const guides: GuideRow[] = await req("guides?select=*&order=slug.asc");
+      const stats: { slug: string; champion: string | null; views: number; likes: number }[] =
+        await req("rpc/guide_stats", { method: "POST", body: "{}" });
+      const views = await fetchAll(
+        "guide_views?select=guide_id,visitor_id,created_at&order=created_at.desc"
+      );
+      const likes = await fetchAll(
+        "guide_likes?select=guide_id,visitor_id,created_at&order=created_at.desc"
+      );
+      return construirOverview("supabase", guides, stats, views, likes);
+    },
   };
+
+  // Paginación defensiva: PostgREST corta a 1000 filas por request; el dashboard
+  // sigue funcionando cuando el sitio escale (content-range da el total).
+  async function fetchAll(path: string): Promise<any[]> {
+    const out: any[] = [];
+    let offset = 0;
+    for (;;) {
+      const sep = path.includes("?") ? "&" : "?";
+      const r = await fetch(`${url}/rest/v1/${path}${sep}limit=1000&offset=${offset}`, {
+        headers: { ...headers, Prefer: "count=exact" },
+        cache: "no-store",
+      });
+      if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+      const rows: any[] = await r.json();
+      out.push(...rows);
+      const total = Number((r.headers.get("content-range") || "").split("/")[1] || out.length);
+      offset += rows.length;
+      if (rows.length < 1000 || offset >= total) return out;
+    }
+  }
 }
 
 // ─────────────────────────────── Memoria (dev local) ────────────────────────
 function memoryDb(): Db {
   const guides = new Map<string, GuideRow & { id: number }>();
   const views: { guideId: number; visitorId: string; at: number }[] = [];
-  const likes = new Map<string, true>();
+  const likes = new Map<string, { at: number }>();
   let nextId = 1;
   const likeKey = (g: number, v: string) => `${g}|${v}`;
   return {
@@ -156,7 +202,7 @@ function memoryDb(): Db {
       return views.filter((v) => v.guideId === guideId).length;
     },
     async setLike(guideId, visitorId, liked) {
-      if (liked) likes.set(likeKey(guideId, visitorId), true);
+      if (liked) likes.set(likeKey(guideId, visitorId), { at: Date.now() });
       else likes.delete(likeKey(guideId, visitorId));
     },
     async getLike(guideId, visitorId) {
@@ -165,6 +211,94 @@ function memoryDb(): Db {
     async countLikes(guideId) {
       return [...likes.keys()].filter((k) => k.startsWith(`${guideId}|`)).length;
     },
+    async adminOverview() {
+      const gs = [...guides.values()];
+      const stats = gs.map((g) => ({
+        slug: g.slug,
+        champion: g.champion,
+        views: views.filter((v) => v.guideId === g.id).length,
+        likes: [...likes.keys()].filter((k) => k.startsWith(`${g.id}|`)).length,
+      }));
+      const vRows = views
+        .slice()
+        .sort((a, b) => b.at - a.at)
+        .map((v) => ({ guide_id: v.guideId, visitor_id: v.visitorId, created_at: new Date(v.at).toISOString() }));
+      const lRows = [...likes.entries()]
+        .map(([k, val]) => {
+          const [g] = k.split("|").map(Number);
+          return { guide_id: g, visitor_id: k.split("|")[1], created_at: new Date(val.at).toISOString() };
+        })
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+      return construirOverview("memory", gs, stats, vRows, lRows);
+    },
+  };
+}
+
+// ─────────── Fase 8: agregación compartida (Supabase y memoria) ───────────
+// Recibe filas CRUDAS de eventos (guide_views / guide_likes con created_at ISO)
+// y el resultado de guide_stats(); arma totales, tablas y serie de 14 días.
+function construirOverview(
+  kind: "supabase" | "memory",
+  guides: GuideRow[],
+  stats: { slug: string; champion: string | null; views: number; likes: number }[],
+  views: { guide_id: number; visitor_id: string; created_at: string }[],
+  likes: { guide_id: number; visitor_id: string; created_at: string }[]
+): AdminOverview {
+  const rolPorSlug = new Map(guides.map((g) => [g.slug, g.role ?? null]));
+  const slugPorId = new Map(guides.map((g) => [g.id, g.slug]));
+
+  const porGuia = stats
+    .map((s) => ({ ...s, role: rolPorSlug.get(s.slug) ?? null }))
+    .sort((a, b) => b.views - a.views || b.likes - a.likes || a.slug.localeCompare(b.slug));
+
+  const champ = new Map<string, { champion: string; views: number; likes: number; guias: number }>();
+  for (const s of porGuia) {
+    const nombre = s.champion || s.slug;
+    const e = champ.get(nombre) || { champion: nombre, views: 0, likes: 0, guias: 0 };
+    e.views += s.views;
+    e.likes += s.likes;
+    e.guias += 1;
+    champ.set(nombre, e);
+  }
+
+  // Serie diaria UTC de los últimos 14 días (días sin actividad → 0, para que
+  // el gráfico no mienta estirando barras).
+  const hoy = new Date();
+  const dias: string[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() - i));
+    dias.push(d.toISOString().slice(0, 10));
+  }
+  const serie = new Map(dias.map((d) => [d, { dia: d, views: 0, likes: 0 }]));
+  for (const v of views) {
+    const e = serie.get(String(v.created_at).slice(0, 10));
+    if (e) e.views++;
+  }
+  for (const l of likes) {
+    const e = serie.get(String(l.created_at).slice(0, 10));
+    if (e) e.likes++;
+  }
+
+  const recientes = [
+    ...views.map((v) => ({ tipo: "view" as const, slug: slugPorId.get(v.guide_id) || "¿?", at: String(v.created_at) })),
+    ...likes.map((l) => ({ tipo: "like" as const, slug: slugPorId.get(l.guide_id) || "¿?", at: String(l.created_at) })),
+  ]
+    .sort((a, b) => (a.at < b.at ? 1 : -1))
+    .slice(0, 12);
+
+  return {
+    generado: new Date().toISOString(),
+    db: kind,
+    totals: {
+      views: views.length,
+      likes: likes.length,
+      visitantes: new Set(views.map((v) => v.visitor_id)).size,
+      guias: guides.length,
+    },
+    porGuia,
+    porCampeon: [...champ.values()].sort((a, b) => b.views - a.views),
+    diario: [...serie.values()],
+    recientes,
   };
 }
 

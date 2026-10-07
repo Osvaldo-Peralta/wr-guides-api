@@ -30,6 +30,8 @@ PGRST204 del 2026-10-06).
 | GET | `/api/guides/:slug/stats` | `{ views, likes }` |
 | POST | `/api/guides/:slug/view` | beacon de vista (202, dedupe 1 h) |
 | GET/POST | `/api/guides/:slug/like` | estado / toggle (`{action:"like"\|"unlike"}`) |
+| GET | `/admin` | **dashboard privado (Fase 8)** — Basic Auth: contraseña = `ADMIN_TOKEN` |
+| GET | `/api/admin/stats` | overview agregado en JSON (misma auth; `curl -u admin:TU_TOKEN …`) |
 
 CORS: orígenes en `ALLOWED_ORIGINS` (default: web en Vercel + localhost:3000),
 con credenciales. Rate-limiting robusto (Upstash) queda para v2 — el dedupe y
@@ -85,3 +87,27 @@ node scripts/seed-guides.mjs   # siembra desde el índice del frontend
 
 Importar este repo → framework Next.js (autodetectado) → añadir las 3 env vars
 → Deploy. Verificar: `GET /api/health` debe responder `{ ok: true, db: "supabase" }`.
+
+## Dashboard privado (Fase 8)
+
+`GET /admin` — panel server-rendered (sin JS cliente) con el estado de
+comunidad que vive en Supabase: totales (vistas, likes, visitantes únicos,
+tasa de like), serie de 14 días, tablas por guía y por campeón, y actividad
+reciente. Estética Jinx, mismo lenguaje visual que el sitio.
+
+- **Auth:** HTTP Basic vía `middleware.ts` — la contraseña es el valor de
+  `ADMIN_TOKEN` (el mismo secret que ya protege `POST /api/guides`; no se
+  agrega ningún secreto nuevo). Usuario: cualquiera (`admin`). Sin token
+  configurado → 503, nunca un panel abierto.
+- **Por qué vive en este repo y no en wr-guides-web:** el estado y los secrets
+  (Supabase service_role, ADMIN_TOKEN) ya están acá; el web queda 100 %
+  estático y público. El plan original decía "/admin en el frontend", escrito
+  antes de que esta API fuera una app Next.js completa.
+- **JSON:** `GET /api/admin/stats` devuelve el mismo overview (para debugging
+  y futuros consumidores): `curl -u admin:TU_ADMIN_TOKEN https://<api>/api/admin/stats`.
+- **Complemento, no duplicado:** tráfico por país/dispositivo/referente sigue
+  en Vercel Web Analytics del proyecto web (Fase 7); acá solo estado de comunidad.
+- **Tests:** `npm test` corre la regresión v0.3.2 + `scripts/test-admin.mjs`
+  (auth 401/200 + agregaciones contra un mock PostgREST con `rpc/guide_stats`).
+- **Escala:** las lecturas de eventos paginan de a 1000 filas (Content-Range);
+  el agregado por guía usa la función SQL `guide_stats()` del schema v0.3.

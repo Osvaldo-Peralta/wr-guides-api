@@ -1,28 +1,70 @@
-API v0.3.2 — fix del like 502 (2026-10-06)
-════════════════════════════════════════════
+WR-GUIDES-API · FASE 8 — DASHBOARD PRIVADO /admin  (2026-10-07, v0.4.0)
+══════════════════════════════════════════════════════════════════
 
-QUÉ ARREGLA
-  POST /api/guides/[slug]/like devolvía 502 "Unexpected end of JSON input"
-  en producción (v0.3.1), aunque el like/unlike SÍ se guardaba en Supabase.
-  Causa: Prefer: return=minimal → PostgREST responde sin cuerpo; lib/db.ts
-  llamaba r.json() a ciegas. Fix: tolerar cuerpo vacío.
-  Nuevo: npm test → 9/9 con un mock de PostgREST (reproduce el bug real).
+QUÉ INCLUYE
+  · middleware.ts                  Basic Auth en /admin y /api/admin/*
+                                   (contraseña = ADMIN_TOKEN, el secret que YA
+                                   tenés; usuario cualquiera, p. ej. "admin")
+  · app/admin/page.tsx             dashboard server-rendered, estética Jinx:
+                                   KPIs (vistas, likes, visitantes únicos,
+                                   guías, tasa de like) · gráfico de 14 días ·
+                                   tablas por guía y por campeón · actividad
+                                   reciente. Sin JS cliente, sin dependencias.
+  · app/api/admin/stats/route.ts   el mismo overview en JSON (debugging/scripting)
+  · lib/db.ts                      adminOverview(): agregación con la función
+                                   SQL guide_stats() + lecturas paginadas de a
+                                   1000 eventos (aguanta escala)
+  · app/page.tsx, app/layout.tsx   ajustes menores (lista de rutas; body en
+                                   <style> para que /admin pinte a sangre)
+  · scripts/test-admin.mjs         test de regresión Fase 8 (auth 401/200 +
+                                   agregaciones contra mock PostgREST)
+  · package.json                   v0.4.0 · npm test = regresión v0.3.2 + Fase 8
+  · README.md, OPERACIONES.md §9, docs/ROADMAP-V2-V4.md (hoja de ruta V2–V4,
+    entregable del plan)
+
+NO TOCA wr-guides-web ni wr-lab. No agrega secrets ni variables de entorno:
+reusa ADMIN_TOKEN y las claves de Supabase que ya existen.
 
 PASOS (en tu máquina)
-  1. Descomprimí este zip DENTRO de tu clon local, sobreescribiendo:
-       cd "/home/morningstar/Proyectos/Sitio Web/wr-guides-api"
-       unzip -o ruta/al/wr-guides-api-v0.3.2.zip
-  2. Verificá el fix localmente (opcional pero recomendado):
-       npm install
-       npm test          # → 9/9 verdes
-  3. Commit + push (Vercel redeploya solo):
-       git add lib/db.ts package.json scripts/test-like-minimal.mjs OPERACIONES.md docs/PRIMER-DESPLEGUE.md
-       git commit -m "v0.3.2: fix like 502 (PostgREST return=minimal, cuerpo vacío) + test de regresión"
+  1. Descomprimí el zip DENTRO de tu clon de la API, sobreescribiendo:
+       cd "<tu-clon>/wr-guides-api"
+       unzip -o ruta/al/wr-guides-api-fase8.zip
+  2. (Opcional, recomendado) tests de regresión:
+       npm install && npm test      → 9 + 17 checks verdes (~1-2 min)
+  3. (Opcional) build de control:
+       npm run build
+  4. Commit + push (Vercel redeploya solo):
+       git add -A
+       git commit -m "Fase 8: dashboard privado /admin (Basic Auth con ADMIN_TOKEN)"
        git push
-  4. Cuando el deploy termine (~1-2 min), verificá producción:
-       curl -s -X POST https://wr-guides-api.vercel.app/api/guides/jinx/like          -H "Content-Type: application/json" -H "x-visitor-id: $(uuidgen)"          -d '{"action":"like"}'
-       # esperado: {"liked":true,"likes":N}   (con v0.3.1 salía 502)
-       # si el deploy NO trae el fix, el health sigue en 200 pero el like da 502.
+  5. Abrí https://wr-guides-api.vercel.app/admin
+       → prompt del navegador: usuario "admin", contraseña = tu ADMIN_TOKEN
+         (el mismo valor que ya está en Vercel → Settings → Environment Variables)
+       → si no lo recordás: es el que generaste con `openssl rand -hex 24`.
 
-IMPORTANTE: desplegar esto ANTES que el widget de la web (Fase 5),
-si no el botón "Me gusta" recibiría 502 (aunque se guardaría igual).
+VERIFICACIÓN EN PRODUCCIÓN (checklist)
+  a. /admin sin credenciales → prompt 401 (nunca contenido).
+  b. Con credenciales → KPIs con TUS números reales (vistas/likes acumulados
+     desde el 06-10, incluidas tus pruebas y las mías de verificación).
+  c. Tabla por guía: los conteos coinciden con los badges 👁/❤ del sitio.
+  d. Gráfico de 14 días: barras solo en los días con actividad (el sitio es
+     joven: pocos días pintados es lo correcto).
+  e. JSON: curl -u admin:TU_ADMIN_TOKEN https://wr-guides-api.vercel.app/api/admin/stats
+  f. /api/health y el sitio público siguen abiertos sin auth (el middleware
+     solo cubre /admin y /api/admin/*).
+
+SI ALGO FALLA
+  · 503 en /admin → falta ADMIN_TOKEN en el proyecto API de Vercel (middleware).
+  · Panel con error de BD → la base no tiene la función guide_stats(): corré
+    supabase/schema.sql en el SQL Editor (o revisá que el proyecto Supabase
+    sea el correcto).
+  · El navegador "se queda" con una contraseña vieja tras rotar el token:
+    cerrá la pestaña / usá incógnito (Basic Auth se cachea por sesión).
+
+CONTEXTO
+  · Con esto queda COMPLETA la migración del plan (Fases 0–8). La hoja de ruta
+    V2–V4 (favoritos, comentarios, rollups, alertas) vive en
+    docs/ROADMAP-V2-V4.md, y el rediseño UX grande del sitio quedó anotado
+    ahí como proyecto separado para cuando quieras encararlo.
+  · El panel es noindex y no se linkea desde ningún lado: solo entra quien
+    tiene la contraseña.
