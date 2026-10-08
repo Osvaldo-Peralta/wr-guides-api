@@ -1,0 +1,45 @@
+# WR-GUIDES-API · blindaje operativo (post-migración)
+#
+# Dos trabajos en uno, cada 6 horas:
+#   1. KEEP-ALIVE de Supabase Free: el chequeo de catálogo ejecuta una query
+#      real a la BD vía la API → el proyecto nunca acumula 7 días de
+#      inactividad (pausa automática del plan Free; riesgo real con tráfico
+#      joven, señalado en el plan de migración §3).
+#   2. UPTIME + ALERTA: chequea web y API desde afuera; si algo cae, abre un
+#      issue etiquetado "uptime" (sin spamear: uno a la vez) y lo CIERRA solo
+#      cuando todo vuelve a estar verde.
+#
+# El run también queda rojo/verde en Actions (historial visual).
+# Sin secrets nuevos: usa GITHUB_TOKEN estándar con permiso de issues.
+
+name: Uptime + keep-alive Supabase
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # cada 6 h, minuto 17 (desfase con sync y patch-watch)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: uptime-keepalive
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Chequeos de uptime + keep-alive + gestión de issue
+        env:
+          WR_API: https://wr-guides-api.vercel.app
+          WR_WEB: https://wr-guides-web.vercel.app
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/uptime-check.mjs

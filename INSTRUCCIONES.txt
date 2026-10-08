@@ -1,70 +1,39 @@
-WR-GUIDES-API · FASE 8 — DASHBOARD PRIVADO /admin  (2026-10-07, v0.4.0)
-══════════════════════════════════════════════════════════════════
+WR-GUIDES-API · BLINDAJE OPERATIVO + V2 PREPARADO  (2026-10-08)
+══════════════════════════════════════════════════════════════
 
 QUÉ INCLUYE
-  · middleware.ts                  Basic Auth en /admin y /api/admin/*
-                                   (contraseña = ADMIN_TOKEN, el secret que YA
-                                   tenés; usuario cualquiera, p. ej. "admin")
-  · app/admin/page.tsx             dashboard server-rendered, estética Jinx:
-                                   KPIs (vistas, likes, visitantes únicos,
-                                   guías, tasa de like) · gráfico de 14 días ·
-                                   tablas por guía y por campeón · actividad
-                                   reciente. Sin JS cliente, sin dependencias.
-  · app/api/admin/stats/route.ts   el mismo overview en JSON (debugging/scripting)
-  · lib/db.ts                      adminOverview(): agregación con la función
-                                   SQL guide_stats() + lecturas paginadas de a
-                                   1000 eventos (aguanta escala)
-  · app/page.tsx, app/layout.tsx   ajustes menores (lista de rutas; body en
-                                   <style> para que /admin pinte a sangre)
-  · scripts/test-admin.mjs         test de regresión Fase 8 (auth 401/200 +
-                                   agregaciones contra mock PostgREST)
-  · package.json                   v0.4.0 · npm test = regresión v0.3.2 + Fase 8
-  · README.md, OPERACIONES.md §9, docs/ROADMAP-V2-V4.md (hoja de ruta V2–V4,
-    entregable del plan)
+  · .github/workflows/uptime-keepalive.yml
+      cron cada 6 h (+ botón manual): 5 chequeos externos (health, catálogo,
+      stats, home web, guía web) + KEEP-ALIVE de Supabase Free (el chequeo de
+      catálogo es una query real a la BD: el plan Free pausa tras 7 días de
+      inactividad y el sitio es joven). Si algo cae → issue etiquetado
+      "uptime" (uno a la vez, sin spam); cuando todo se recupera → el cron
+      comenta "recuperado" y cierra el issue. Sin secrets nuevos.
+  · scripts/uptime-check.mjs
+      el motor de lo anterior; testeable en local:
+        node scripts/uptime-check.mjs                 → todo verde, exit 0
+        WR_API=https://roto.example node …            → ❌ + exit 1
+  · supabase/migrations/002_guide_favorites.sql
+      V2 producto PREPARADO pero NO APLICADO: tabla de favoritos anónimos
+      (espejo de guide_likes, RLS, UNIQUE guide+visitor). NO la corras ahora:
+      se aplica el día que arranque V2 (ver docs/ROADMAP-V2-V4.md, que ya
+      documenta que el diseño está cerrado y solo falta ejecución).
+  · OPERACIONES.md §10 (runbook de uptime/alertas), README.md, ROADMAP V2-V4.
 
-NO TOCA wr-guides-web ni wr-lab. No agrega secrets ni variables de entorno:
-reusa ADMIN_TOKEN y las claves de Supabase que ya existen.
+PASOS
+  1. cd "<tu-clon>/wr-guides-api" && unzip -o ruta/al/wr-guides-api-blindaje.zip
+  2. (Opcional) node scripts/uptime-check.mjs   → 5/5 verde contra producción
+  3. git add -A && git commit -m "Blindaje: uptime + keep-alive Supabase (cron 6h) y migración V2 preparada" && git push
+  4. (Opcional, recomendado) GitHub → wr-guides-api → Actions →
+     "Uptime + keep-alive Supabase" → Run workflow: valida YA el ciclo
+     completo (chequeos + summary) sin esperar al primer cron.
 
-PASOS (en tu máquina)
-  1. Descomprimí el zip DENTRO de tu clon de la API, sobreescribiendo:
-       cd "<tu-clon>/wr-guides-api"
-       unzip -o ruta/al/wr-guides-api-fase8.zip
-  2. (Opcional, recomendado) tests de regresión:
-       npm install && npm test      → 9 + 17 checks verdes (~1-2 min)
-  3. (Opcional) build de control:
-       npm run build
-  4. Commit + push (Vercel redeploya solo):
-       git add -A
-       git commit -m "Fase 8: dashboard privado /admin (Basic Auth con ADMIN_TOKEN)"
-       git push
-  5. Abrí https://wr-guides-api.vercel.app/admin
-       → prompt del navegador: usuario "admin", contraseña = tu ADMIN_TOKEN
-         (el mismo valor que ya está en Vercel → Settings → Environment Variables)
-       → si no lo recordás: es el que generaste con `openssl rand -hex 24`.
+VERIFICACIÓN
+  a. Actions: el run manual queda verde con el summary de los 5 chequeos.
+  b. Las corridas cron aparecen solas a las 00:17, 06:17, 12:17 y 18:17 UTC.
+  c. Prueba de alerta (opcional, sin riesgo): NO hay forma sencilla de romper
+     producción a propósito — confía en el test local con WR_API roto.
+  d. Supabase: ya no hay ventana de pausa por inactividad mientras el cron
+     esté activo (4 queries/día como mínimo).
 
-VERIFICACIÓN EN PRODUCCIÓN (checklist)
-  a. /admin sin credenciales → prompt 401 (nunca contenido).
-  b. Con credenciales → KPIs con TUS números reales (vistas/likes acumulados
-     desde el 06-10, incluidas tus pruebas y las mías de verificación).
-  c. Tabla por guía: los conteos coinciden con los badges 👁/❤ del sitio.
-  d. Gráfico de 14 días: barras solo en los días con actividad (el sitio es
-     joven: pocos días pintados es lo correcto).
-  e. JSON: curl -u admin:TU_ADMIN_TOKEN https://wr-guides-api.vercel.app/api/admin/stats
-  f. /api/health y el sitio público siguen abiertos sin auth (el middleware
-     solo cubre /admin y /api/admin/*).
-
-SI ALGO FALLA
-  · 503 en /admin → falta ADMIN_TOKEN en el proyecto API de Vercel (middleware).
-  · Panel con error de BD → la base no tiene la función guide_stats(): corré
-    supabase/schema.sql en el SQL Editor (o revisá que el proyecto Supabase
-    sea el correcto).
-  · El navegador "se queda" con una contraseña vieja tras rotar el token:
-    cerrá la pestaña / usá incógnito (Basic Auth se cachea por sesión).
-
-CONTEXTO
-  · Con esto queda COMPLETA la migración del plan (Fases 0–8). La hoja de ruta
-    V2–V4 (favoritos, comentarios, rollups, alertas) vive en
-    docs/ROADMAP-V2-V4.md, y el rediseño UX grande del sitio quedó anotado
-    ahí como proyecto separado para cuando quieras encararlo.
-  · El panel es noindex y no se linkea desde ningún lado: solo entra quien
-    tiene la contraseña.
+NADA de esto toca endpoints, schema aplicado ni el dashboard /admin.

@@ -111,3 +111,27 @@ reciente. Estética Jinx, mismo lenguaje visual que el sitio.
   (auth 401/200 + agregaciones contra un mock PostgREST con `rpc/guide_stats`).
 - **Escala:** las lecturas de eventos paginan de a 1000 filas (Content-Range);
   el agregado por guía usa la función SQL `guide_stats()` del schema v0.3.
+
+## Blindaje operativo (post-migración)
+
+`.github/workflows/uptime-keepalive.yml` — cron cada 6 h (+ manual) con dos
+trabajos en uno:
+
+1. **Keep-alive de Supabase Free:** el chequeo de catálogo ejecuta una query
+   real a la BD vía la API. El plan Free pausa proyectos tras 7 días de
+   inactividad; con tráfico joven este cron es el seguro de vida.
+2. **Uptime + alerta:** chequea `health`, catálogo, stats y las dos páginas
+   clave del web. Si algo cae → abre UN issue etiquetado `uptime` (sin
+   spamear); cuando todo vuelve al verde → comenta "recuperado" y lo cierra.
+   El run queda rojo/verde en Actions como historial.
+
+Sin secrets nuevos (GITHUB_TOKEN con `issues: write`). Test local:
+`node scripts/uptime-check.mjs` (sin token solo chequea; con WR_API roto
+debe salir 1).
+
+## Preparado para V2 (favoritos)
+
+`supabase/migrations/002_guide_favorites.sql` está escrita y documentada pero
+**NO aplicada**: tabla espejo de `guide_likes` para favoritos anónimos.
+Se corre en Supabase el día que arranque V2 (hoja de ruta en
+docs/ROADMAP-V2-V4.md); los endpoints salen espejando los de like.

@@ -25,6 +25,12 @@ gratuitos).
    email mágico, tabla `profiles`, migrar likes a `user_id` con backfill por
    visitor_id. No hacerlo "por si acaso".
 
+**Estado de preparación (2026-10-08):** la migración `002_guide_favorites.sql`
+ya está escrita y documentada en `supabase/migrations/` (NO aplicada):
+tabla espejo de `guide_likes` con RLS y UNIQUE (guide_id, visitor_id).
+El día que se arranque: correr la migración en Supabase y espejar los
+endpoints/UI de like — no hay diseño pendiente, solo ejecución.
+
 **Criterio de entrada:** el panel `/admin` muestra que una fracción relevante
 de visitantes vuelve (visitantes únicos vs vistas repetidas) → ahí el guardado
 tiene público.

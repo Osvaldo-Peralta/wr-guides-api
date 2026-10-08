@@ -333,7 +333,29 @@ curl -u admin:TU_ADMIN_TOKEN https://TU-api.vercel.app/api/admin/stats
 · Números en 0 con sitio activo → el seed no incluye guías nuevas: corrido
    manual de `npm run seed` o el re-seed automático del sync (Fase 6 del web).
 
-*v1.2 — 2026-10-07 · Cubre: montaje desde cero, flujo diario de guías, health
+## 10. Uptime y keep-alive (cron 6 h)
+
+**Qué corre:** `.github/workflows/uptime-keepalive.yml` (cada 6 h, minuto 17,
++ botón manual). Hace 5 chequeos externos (health, catálogo, stats, home web,
+guía web) y de paso mantiene Supabase Free despierto: el chequeo de catálogo
+es una query real a la BD, y el plan Free pausa tras 7 días sin actividad.
+
+**Alertas sin spam:** si algo falla → issue etiquetado `uptime` (máximo uno
+abierto a la vez). Cuando todo vuelve al verde → el mismo cron comenta
+"recuperado" y cierra el issue. Historial visual: pestaña Actions, run verde/rojo.
+
+**Si ves un issue `uptime` abierto:**
+1. Abrí el run linkeado en el issue → mirá cuál chequeo falló y su detalle.
+2. `db="none"` en health → se cayeron las env vars de Supabase en Vercel (§3.5).
+3. Web caída pero API viva → deploy del web roto: Vercel → último deploy → logs.
+4. Todo verde de nuevo → el cron cierra el issue solo en la próxima corrida
+   (o cerralo a mano, no pasa nada).
+
+**Keep-alive manual (si el cron estuviera deshabilitado):** cualquier request
+a `GET /api/guides` toca Supabase; con uno por semana basta para evitar la
+pausa, pero dejá el cron: también es tu alarma de incendios.
+
+*v1.3 — 2026-10-08 · Cubre: montaje desde cero, flujo diario de guías, health
 checks (con URLs reales + `npm test`), troubleshooting de errores reales (incl.
 el like 502 de v0.3.1), dashboard /admin (Fase 8), seguridad. Actualizar este archivo cuando cambie el
 flujo (es parte del repo: vive junto a la API).*
