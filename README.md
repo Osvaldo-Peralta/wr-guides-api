@@ -30,6 +30,8 @@ PGRST204 del 2026-10-06).
 | GET | `/api/guides/:slug/stats` | `{ views, likes }` |
 | POST | `/api/guides/:slug/view` | beacon de vista (202, dedupe 1 h) |
 | GET/POST | `/api/guides/:slug/like` | estado / toggle (`{action:"like"\|"unlike"}`) |
+| GET/POST | `/api/guides/:slug/favorite` | **V2**: estado / toggle de favorito (`{action:"add"\|"remove"}`) |
+| GET | `/api/favorites` | **V2**: slugs favoritos del visitante (`{ slugs }`) |
 | GET | `/admin` | **dashboard privado (Fase 8)** — Basic Auth: contraseña = `ADMIN_TOKEN` |
 | GET | `/api/admin/stats` | overview agregado en JSON (misma auth; `curl -u admin:TU_TOKEN …`) |
 
@@ -135,3 +137,17 @@ debe salir 1).
 **NO aplicada**: tabla espejo de `guide_likes` para favoritos anónimos.
 Se corre en Supabase el día que arranque V2 (hoja de ruta en
 docs/ROADMAP-V2-V4.md); los endpoints salen espejando los de like.
+
+## Favoritos anónimos (V2)
+
+- **Qué es:** ⭐ por guía, anónimo como el like (visitor-id del localStorage),
+  1 favorito por visitante y guía (UNIQUE en BD), toggle add/remove.
+- **Requisito:** migration `supabase/migrations/002_guide_favorites.sql`
+  aplicada en Supabase (SQL Editor). Sin ella los endpoints de favoritos
+  responden 502 con detalle claro; el resto del sitio sigue intacto.
+- **Endpoints:** `GET|POST /api/guides/:slug/favorite` y `GET /api/favorites`
+  (lista del visitante, para el home del web).
+- **Dashboard:** `/admin` muestra ⭐ totales, columna favs por guía y eventos
+  `fav` en el feed.
+- **Tests:** `npm test` incluye `scripts/test-favorites.mjs` (add/dedupe/list/
+  remove/admin/404 contra mock PostgREST).

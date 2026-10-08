@@ -13,6 +13,7 @@
 // Env (las pone el workflow; locales opcionales):
 //   WR_API, WR_WEB, GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID…
 // Exit: 0 todo verde · 1 hay fallas (el run queda rojo además del issue).
+import fs from "node:fs";
 
 const API = (process.env.WR_API || "https://wr-guides-api.vercel.app").replace(/\/+$/, "");
 const WEB = (process.env.WR_WEB || "https://wr-guides-web.vercel.app").replace(/\/+$/, "");
@@ -93,7 +94,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
       ? `🚨 **${fallas.length} chequeo(s) fallando.** Issue de alerta gestionado abajo.`
       : `Todo verde. Supabase recibió su query keep-alive.`,
   ];
-  require("node:fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
 }
 
 // ── gestión de issue (solo con token, solo en Actions) ──

@@ -123,6 +123,7 @@ export default async function AdminPage() {
       <section className="wra-kpis">
         <Kpi icono="👁" valor={nf.format(ov.totals.views)} etiqueta="vistas totales" />
         <Kpi icono="❤" valor={nf.format(ov.totals.likes)} etiqueta="likes totales" />
+        <Kpi icono="⭐" valor={nf.format(ov.totals.favoritos)} etiqueta="favoritos (V2)" />
         <Kpi icono="🧍" valor={nf.format(ov.totals.visitantes)} etiqueta="visitantes únicos" nota="en vistas" />
         <Kpi icono="📚" valor={nf.format(ov.totals.guias)} etiqueta="guías sembradas" />
         <Kpi icono="💘" valor={`${tasa}/100`} etiqueta="tasa de like" nota="likes c/100 vistas" />
@@ -138,7 +139,7 @@ export default async function AdminPage() {
         <div className="wra-scroll">
           <table>
             <thead>
-              <tr><th>Guía</th><th>Campeón</th><th>Rol</th><th className="num">👁</th><th className="num">❤</th><th className="num">💘/100</th></tr>
+              <tr><th>Guía</th><th>Campeón</th><th>Rol</th><th className="num">👁</th><th className="num">❤</th><th className="num">⭐</th><th className="num">💘/100</th></tr>
             </thead>
             <tbody>
               {ov.porGuia.map((g) => (
@@ -148,10 +149,11 @@ export default async function AdminPage() {
                   <td>{g.role ?? "—"}</td>
                   <td className="num">{nf.format(g.views)}</td>
                   <td className="num">{nf.format(g.likes)}</td>
+                  <td className="num">{nf.format(g.favs)}</td>
                   <td className="num">{g.views ? Math.round((g.likes / g.views) * 100) : 0}</td>
                 </tr>
               ))}
-              {!ov.porGuia.length && <tr><td colSpan={6}>Sin guías sembradas todavía.</td></tr>}
+              {!ov.porGuia.length && <tr><td colSpan={7}>Sin guías sembradas todavía.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -180,7 +182,7 @@ export default async function AdminPage() {
           <ul className="wra-feed">
             {ov.recientes.map((r, i) => (
               <li key={i}>
-                <span className={r.tipo === "like" ? "wra-ev-like" : "wra-ev-view"}>{r.tipo === "like" ? "❤" : "👁"}</span>
+                <span className={r.tipo === "like" ? "wra-ev-like" : r.tipo === "fav" ? "wra-ev-fav" : "wra-ev-view"}>{r.tipo === "like" ? "❤" : r.tipo === "fav" ? "⭐" : "👁"}</span>
                 <span className="wra-ev-slug">{r.slug}</span>
                 <span className="wra-ev-at" title={r.at}>{rel(r.at)}</span>
               </li>
@@ -252,6 +254,7 @@ const CSS = `
 .wra-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; font-size: .88rem; }
 .wra-feed li { display: flex; gap: .5rem; align-items: baseline; }
 .wra-ev-like { color: var(--pink); }
+.wra-ev-fav { color: var(--yellow); }
 .wra-ev-view { color: var(--cyan); }
 .wra-ev-slug { font-weight: 600; }
 .wra-ev-at { color: var(--soft); font-size: .78rem; margin-left: auto; }

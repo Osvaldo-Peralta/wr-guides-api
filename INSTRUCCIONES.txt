@@ -1,39 +1,48 @@
-WR-GUIDES-API · BLINDAJE OPERATIVO + V2 PREPARADO  (2026-10-08)
+WR-GUIDES-API · v0.5.0 — FIX UPTIME + V2 FAVORITOS  (2026-10-08)
 ══════════════════════════════════════════════════════════════
 
 QUÉ INCLUYE
-  · .github/workflows/uptime-keepalive.yml
-      cron cada 6 h (+ botón manual): 5 chequeos externos (health, catálogo,
-      stats, home web, guía web) + KEEP-ALIVE de Supabase Free (el chequeo de
-      catálogo es una query real a la BD: el plan Free pausa tras 7 días de
-      inactividad y el sitio es joven). Si algo cae → issue etiquetado
-      "uptime" (uno a la vez, sin spam); cuando todo se recupera → el cron
-      comenta "recuperado" y cierra el issue. Sin secrets nuevos.
-  · scripts/uptime-check.mjs
-      el motor de lo anterior; testeable en local:
-        node scripts/uptime-check.mjs                 → todo verde, exit 0
-        WR_API=https://roto.example node …            → ❌ + exit 1
-  · supabase/migrations/002_guide_favorites.sql
-      V2 producto PREPARADO pero NO APLICADO: tabla de favoritos anónimos
-      (espejo de guide_likes, RLS, UNIQUE guide+visitor). NO la corras ahora:
-      se aplica el día que arranque V2 (ver docs/ROADMAP-V2-V4.md, que ya
-      documenta que el diseño está cerrado y solo falta ejecución).
-  · OPERACIONES.md §10 (runbook de uptime/alertas), README.md, ROADMAP V2-V4.
+  · FIX del workflow uptime: scripts/uptime-check.mjs usaba require() en un
+    módulo ESM (solo explotaba en Actions, donde GITHUB_STEP_SUMMARY existe;
+    en local esa rama no se ejecutaba por eso pasaba). Ahora import fs arriba.
+  · V2 PRODUCTO — favoritos anónimos:
+      app/api/guides/[slug]/favorite/route.ts   GET estado · POST add/remove
+      app/api/favorites/route.ts                GET slugs del visitante
+      lib/db.ts                                 setFavorite/getFavorite/
+                                                countFavorites/listVisitor…
+                                                (Supabase + memoria) y el
+                                                overview del /admin ahora
+                                                trae favoritos (KPI ⭐, columna
+                                                favs, eventos fav en el feed)
+      scripts/test-favorites.mjs                regresión V2 (13 checks)
+      scripts/test-admin.mjs                    mock actualizado (tabla nueva)
+      package.json                              v0.5.0 · npm test = 3 suites
+  · supabase/migrations/002_guide_favorites.sql (la misma del zip anterior)
+  · README.md con endpoints y sección V2
 
-PASOS
-  1. cd "<tu-clon>/wr-guides-api" && unzip -o ruta/al/wr-guides-api-blindaje.zip
-  2. (Opcional) node scripts/uptime-check.mjs   → 5/5 verde contra producción
-  3. git add -A && git commit -m "Blindaje: uptime + keep-alive Supabase (cron 6h) y migración V2 preparada" && git push
-  4. (Opcional, recomendado) GitHub → wr-guides-api → Actions →
-     "Uptime + keep-alive Supabase" → Run workflow: valida YA el ciclo
-     completo (chequeos + summary) sin esperar al primer cron.
+⚠ ORDEN OBLIGATORIO
+  1. SUPABASE PRIMERO: SQL Editor → pegar y correr
+     supabase/migrations/002_guide_favorites.sql  (idempotente: IF NOT EXISTS).
+     Sin la tabla, los endpoints de favoritos responden 502 con detalle claro
+     (el resto del sitio y el dashboard siguen funcionando igual).
+  2. Después este zip: descomprimir sobre tu clon → npm install → npm test
+     (3 suites: like 502 + admin + favoritos, ~2 min) → commit + push.
+  3. Verificar:
+       curl -X POST https://wr-guides-api.vercel.app/api/guides/jinx/favorite \
+         -H 'content-type: application/json' -H 'x-visitor-id: 123e4567-e89b-42d3-a456-426614174000' \
+         -d '{"action":"add"}'
+       → {"favorite":true,"favorites":N}   (y remove para volver)
+  4. Re-corré el workflow "Uptime + keep-alive" manualmente: esta vez el step
+     debe terminar en verde Y escribir el summary con los 5 chequeos.
 
-VERIFICACIÓN
-  a. Actions: el run manual queda verde con el summary de los 5 chequeos.
-  b. Las corridas cron aparecen solas a las 00:17, 06:17, 12:17 y 18:17 UTC.
-  c. Prueba de alerta (opcional, sin riesgo): NO hay forma sencilla de romper
-     producción a propósito — confía en el test local con WR_API roto.
-  d. Supabase: ya no hay ventana de pausa por inactividad mientras el cron
-     esté activo (4 queries/día como mínimo).
+VERIFICACIÓN EN PRODUCCIÓN (con el web desplegado también)
+  a. /guias/jinx: botón "☆ Guardar" arriba a la derecha de los badges.
+  b. Click → "★ En favoritos · N"; F5 → persiste (mismo navegador).
+  c. Home: sección "★ Tus favoritas" con la guía; visitá otra guía y volvé:
+     "📖 Seguir leyendo" (historial local, sin API).
+  d. /admin: KPI ⭐ favoritos, columna favs por guía, eventos ⭐ en el feed.
 
-NADA de esto toca endpoints, schema aplicado ni el dashboard /admin.
+PRIVACIDAD
+  Favoritos = mismo modelo anónimo que likes/vistas: visitor-id en
+  localStorage, sin cuentas, sin PII, RLS sin políticas anon (solo la API
+  toca la tabla). Borrar el navegador = borrado el vínculo.
